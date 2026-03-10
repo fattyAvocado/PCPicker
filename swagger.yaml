@@ -1,0 +1,3649 @@
+openapi: 3.0.0
+info:
+  title: E-commerce API
+  description: Complete API documentation for E-commerce platform with product categories, brands, models, layout management, role-based access, reCAPTCHA protection, and auto-generated IDs
+  version: 4.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:3001/api
+    description: Development server
+  - url: https://api.ecommerce.com/v1
+    description: Production server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # ============= reCAPTCHA Schemas =============
+    RecaptchaToken:
+      type: object
+      required:
+        - recaptchaToken
+      properties:
+        recaptchaToken:
+          type: string
+          description: "Google reCAPTCHA token (v2 or v3)"
+          example: "03AGdBq27s_7xU3zQYxK5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X"
+
+    RecaptchaResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        score:
+          type: number
+          example: 0.9
+          description: "reCAPTCHA v3 score (0.0 to 1.0)"
+        action:
+          type: string
+          example: "login"
+        hostname:
+          type: string
+          example: "example.com"
+
+    # ============= Auth Request Schemas =============
+    SignupRequest:
+      allOf:
+        - $ref: '#/components/schemas/RecaptchaToken'
+        - type: object
+          required:
+            - name
+            - surname
+            - email
+            - password
+            - phone
+          properties:
+            name:
+              type: string
+              example: "John"
+              description: "User's first name"
+            surname:
+              type: string
+              example: "Doe"
+              description: "User's last name"
+            email:
+              type: string
+              format: email
+              example: "john.doe@example.com"
+              description: "User's email address (must be unique)"
+            password:
+              type: string
+              format: password
+              example: "Password123"
+              description: "Password (minimum 6 characters)"
+            phone:
+              type: string
+              example: "9876543210"
+              description: "User's phone number"
+            addresses:
+              type: array
+              description: "Optional array of addresses"
+              items:
+                $ref: '#/components/schemas/Address'
+
+    LoginRequest:
+      allOf:
+        - $ref: '#/components/schemas/RecaptchaToken'
+        - type: object
+          required:
+            - email
+            - password
+          properties:
+            email:
+              type: string
+              format: email
+              example: "john.doe@example.com"
+              description: "User's email address"
+            password:
+              type: string
+              format: password
+              example: "Password123"
+              description: "User's password"
+
+    # ============= Category Schemas (UPDATED with Brands) =============
+    CategoryInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "CAT123456781234"
+          description: "Auto-generated category ID (format: CAT + timestamp + random)"
+        name:
+          type: string
+          example: "Processors"
+        slug:
+          type: string
+          example: "processors"
+        brands:
+          type: array
+          items:
+            type: string
+          example: ["Intel", "AMD"]
+          description: "List of brands available in this category"
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "CAT123456781234"
+          description: "Auto-generated category ID"
+        name:
+          type: string
+          example: "Processors"
+        slug:
+          type: string
+          example: "processors"
+        description:
+          type: string
+          example: "Central Processing Units"
+        brands:
+          type: array
+          items:
+            type: string
+          example: ["Intel", "AMD"]
+          description: "List of brands available in this category"
+        image:
+          type: string
+          example: "https://example.com/category.jpg"
+        order:
+          type: integer
+          example: 1
+        parent:
+          type: object
+          properties:
+            id:
+              type: string
+              example: "CAT123456781233"
+            name:
+              type: string
+              example: "PC Components"
+            slug:
+              type: string
+              example: "pc-components"
+        isActive:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CategoryTree:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "CAT123456781234"
+        name:
+          type: string
+          example: "Electronics"
+        slug:
+          type: string
+          example: "electronics"
+        order:
+          type: integer
+          example: 1
+        image:
+          type: string
+        brands:
+          type: array
+          items:
+            type: string
+          example: ["Samsung", "Sony", "LG"]
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryTree'
+
+    CategoryHierarchy:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "CAT123456781234"
+        name:
+          type: string
+          example: "Laptops"
+        slug:
+          type: string
+          example: "laptops"
+        description:
+          type: string
+        brands:
+          type: array
+          items:
+            type: string
+          example: ["Dell", "HP", "Lenovo"]
+        ancestors:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              slug:
+                type: string
+              brands:
+                type: array
+                items:
+                  type: string
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryTree'
+
+    CategoryCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: "Laptops"
+          description: "Category name (will auto-generate slug)"
+        description:
+          type: string
+          example: "Portable computers"
+        brands:
+          oneOf:
+            - type: array
+              items:
+                type: string
+              example: ["Dell", "HP", "Lenovo", "Apple"]
+            - type: string
+              example: "Dell,HP,Lenovo,Apple"
+          description: "Array of brands or comma-separated string"
+        parent:
+          type: string
+          example: "CAT123456781234"
+          description: "Parent category ID (can be ObjectId or categoryId string, use '0' for root)"
+        image:
+          type: string
+          example: "https://example.com/laptops.jpg"
+        order:
+          type: integer
+          example: 1
+          description: "Display order (default: 0)"
+
+    CategoryUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "Gaming Laptops"
+        description:
+          type: string
+        brands:
+          oneOf:
+            - type: array
+              items:
+                type: string
+            - type: string
+          description: "Array of brands or comma-separated string"
+        parent:
+          type: string
+          example: "CAT123456781234"
+          description: "Parent category ID (null to remove parent, '0' for root)"
+        image:
+          type: string
+        order:
+          type: integer
+        isActive:
+          type: boolean
+
+    CategoryBrands:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        brands:
+          type: array
+          items:
+            type: string
+
+    # ============= Product Schemas (UPDATED with Brand and Model) =============
+    Product:
+      type: object
+      properties:
+        _id:
+          type: string
+        productId:
+          type: string
+          example: "PRD123456781234"
+          description: "Auto-generated product ID (format: PRD + timestamp + random)"
+        name:
+          type: string
+          example: "Intel Core i9-13900K"
+        heading:
+          type: string
+          example: "24-Core Desktop Processor"
+        description:
+          type: string
+        category:
+          $ref: '#/components/schemas/CategoryInfo'
+        brand:
+          type: string
+          example: "Intel"
+          description: "Product brand (required)"
+        model:
+          type: string
+          example: "Core i9-13900K"
+          description: "Product model (optional)"
+        price:
+          type: number
+          example: 58999
+        cost:
+          type: number
+          example: 52000
+        warranty:
+          type: string
+          example: "3 Years"
+        units:
+          type: number
+          example: 25
+        shippingTime:
+          type: string
+          example: "2-3 business days"
+        shippingCost:
+          type: number
+          example: 0
+        images:
+          type: array
+          items:
+            type: object
+            properties:
+              url:
+                type: string
+                example: "https://example.com/image.jpg"
+              thumb:
+                type: string
+                example: "https://example.com/image-thumb.jpg"
+              isPrimary:
+                type: boolean
+        specifications:
+          type: object
+          additionalProperties:
+            type: string
+          example: {}
+        inStock:
+          type: boolean
+        soldCount:
+          type: number
+        ratings:
+          type: object
+          properties:
+            average:
+              type: number
+              example: 4.5
+            count:
+              type: number
+              example: 128
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProductWithRelated:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          properties:
+            relatedProducts:
+              type: array
+              items:
+                $ref: '#/components/schemas/Product'
+
+    ProductCreate:
+      type: object
+      required:
+        - name
+        - heading
+        - description
+        - category
+        - brand
+        - price
+        - cost
+        - warranty
+        - units
+        - shippingTime
+        - shippingCost
+      properties:
+        name:
+          type: string
+          example: "Intel Core i9-13900K"
+        heading:
+          type: string
+          example: "24-Core Desktop Processor"
+        description:
+          type: string
+          example: "The latest Intel processor with 24 cores and 32 threads"
+        category:
+          type: string
+          example: "CAT488199006006"
+          description: "Category ID (can be ObjectId, categoryId, or slug)"
+        brand:
+          type: string
+          example: "Intel"
+          description: "Product brand (required)"
+        model:
+          type: string
+          example: "Core i9-13900K"
+          description: "Product model (optional)"
+        price:
+          type: number
+          example: 58999
+        cost:
+          type: number
+          example: 52000
+        warranty:
+          type: string
+          example: "3 Years"
+        units:
+          type: number
+          example: 25
+        shippingTime:
+          type: string
+          example: "2-3 business days"
+        shippingCost:
+          type: number
+          example: 0
+        specifications:
+          type: object
+          example: {
+          }
+        images:
+          type: array
+          items:
+            type: string
+            format: binary
+          description: "Product images (max 5)"
+
+    ProductUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        heading:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          description: "Category ID (can be ObjectId, categoryId, or slug)"
+        brand:
+          type: string
+        model:
+          type: string
+        price:
+          type: number
+        cost:
+          type: number
+        warranty:
+          type: string
+        units:
+          type: number
+        shippingTime:
+          type: string
+        shippingCost:
+          type: number
+        specifications:
+          type: object
+        images:
+          type: array
+          items:
+            type: string
+            format: binary
+        isActive:
+          type: boolean
+
+    Brand:
+      type: object
+      properties:
+        brand:
+          type: string
+          example: "Intel"
+        productCount:
+          type: integer
+          example: 25
+
+    BrandModels:
+      type: object
+      properties:
+        model:
+          type: string
+          example: "Core i9-13900K"
+        productCount:
+          type: integer
+          example: 5
+
+    # ============= User Schemas =============
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+        userId:
+          type: string
+          example: "USR1234567890123456"
+          description: "Auto-generated user ID (format: USR + timestamp + random)"
+        name:
+          type: string
+        surname:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        role:
+          type: string
+          enum: [user, admin]
+        isActive:
+          type: boolean
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/Address'
+        cart:
+          type: string
+          description: "Cart ID reference"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UserWithStats:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            stats:
+              type: object
+              properties:
+                totalOrders:
+                  type: number
+                totalSpent:
+                  type: number
+                avgOrderValue:
+                  type: number
+                pendingOrders:
+                  type: number
+                deliveredOrders:
+                  type: number
+                cancelledOrders:
+                  type: number
+            recentOrders:
+              type: array
+              items:
+                type: object
+                properties:
+                  orderId:
+                    type: string
+                  total:
+                    type: number
+                  status:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+
+    Address:
+      type: object
+      required:
+        - name
+        - phone
+        - addressLine1
+        - city
+        - state
+        - pincode
+      properties:
+        _id:
+          type: string
+        type:
+          type: string
+          enum: [primary, secondary]
+          default: secondary
+        name:
+          type: string
+          example: "John Doe"
+        phone:
+          type: string
+          example: "9876543210"
+        addressLine1:
+          type: string
+          example: "123 Main Street"
+        addressLine2:
+          type: string
+          example: "Apartment 4B"
+        city:
+          type: string
+          example: "Mumbai"
+        state:
+          type: string
+          example: "Maharashtra"
+        pincode:
+          type: string
+          example: "400001"
+        country:
+          type: string
+          default: "India"
+        isDefault:
+          type: boolean
+          default: false
+
+    # ============= Order Schemas (UPDATED with Brand and Model) =============
+    Order:
+      type: object
+      properties:
+        _id:
+          type: string
+        orderId:
+          type: string
+          example: "ORD123456789"
+          description: "Auto-generated order ID"
+        user:
+          type: object
+          properties:
+            _id:
+              type: string
+            name:
+              type: string
+            email:
+              type: string
+        userId:
+          type: string
+        userName:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              product:
+                $ref: '#/components/schemas/Product'
+              productId:
+                type: string
+              name:
+                type: string
+              brand:
+                type: string
+              model:
+                type: string
+              quantity:
+                type: number
+              price:
+                type: number
+              total:
+                type: number
+        shippingAddress:
+          $ref: '#/components/schemas/Address'
+        billingAddress:
+          $ref: '#/components/schemas/Address'
+        subtotal:
+          type: number
+        shippingCost:
+          type: number
+        tax:
+          type: number
+        total:
+          type: number
+        status:
+          type: string
+          enum: [pending, accepted, ready_to_ship, picked_up, in_transit, delivered, cancelled, refunded]
+        payment:
+          type: object
+          properties:
+            razorpayOrderId:
+              type: string
+            razorpayPaymentId:
+              type: string
+            razorpaySignature:
+              type: string
+            method:
+              type: string
+              enum: [razorpay, cod]
+            status:
+              type: string
+              enum: [pending, completed, failed, refunded]
+            amount:
+              type: number
+            transactionId:
+              type: string
+            refundId:
+              type: string
+            refundedAt:
+              type: string
+              format: date-time
+        statusHistory:
+          type: array
+          items:
+            type: object
+            properties:
+              status:
+                type: string
+              date:
+                type: string
+                format: date-time
+              note:
+                type: string
+              trackingNumber:
+                type: string
+        trackingNumber:
+          type: string
+        estimatedDelivery:
+          type: string
+          format: date-time
+        deliveredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    OrdersByUserResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            user:
+              type: object
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+                email:
+                  type: string
+                phone:
+                  type: string
+            summary:
+              type: object
+              properties:
+                totalAmount:
+                  type: number
+                averageAmount:
+                  type: number
+                totalItems:
+                  type: number
+                minAmount:
+                  type: number
+                maxAmount:
+                  type: number
+                pendingOrders:
+                  type: number
+                deliveredOrders:
+                  type: number
+                cancelledOrders:
+                  type: number
+            statusDistribution:
+              type: array
+              items:
+                type: object
+                properties:
+                  _id:
+                    type: string
+                  count:
+                    type: number
+                  amount:
+                    type: number
+            orders:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Order'
+                pagination:
+                  $ref: '#/components/schemas/Pagination'
+
+    UserOrderStats:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            user:
+              type: object
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+                email:
+                  type: string
+            statistics:
+              type: object
+              properties:
+                overview:
+                  type: object
+                  properties:
+                    totalOrders:
+                      type: number
+                    totalSpent:
+                      type: number
+                    avgOrderValue:
+                      type: number
+                    totalItems:
+                      type: number
+                    firstOrder:
+                      type: string
+                      format: date-time
+                    lastOrder:
+                      type: string
+                      format: date-time
+                byStatus:
+                  type: array
+                  items:
+                    type: object
+                byMonth:
+                  type: array
+                  items:
+                    type: object
+                paymentMethods:
+                  type: array
+                  items:
+                    type: object
+                topProducts:
+                  type: array
+                  items:
+                    type: object
+
+    # ============= Cart Schemas =============
+    Cart:
+      type: object
+      properties:
+        _id:
+          type: string
+        cartId:
+          type: string
+          example: "CART1234567890123456"
+          description: "Auto-generated cart ID"
+        user:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              product:
+                $ref: '#/components/schemas/Product'
+              quantity:
+                type: number
+              price:
+                type: number
+              total:
+                type: number
+        subtotal:
+          type: number
+        shippingCost:
+          type: number
+        tax:
+          type: number
+        total:
+          type: number
+        coupon:
+          type: object
+          properties:
+            code:
+              type: string
+            discount:
+              type: number
+        expiresAt:
+          type: string
+          format: date-time
+
+    # ============= Layout Schemas =============
+    CustomSection:
+      type: object
+      properties:
+        title:
+          type: string
+          example: "Featured Products"
+        type:
+          type: string
+          enum: [products, categories, custom]
+          example: "products"
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+          description: "Populated products for product-type sections"
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                example: "CAT123456789"
+              name:
+                type: string
+                example: "Processors"
+              slug:
+                type: string
+                example: "processors"
+              image:
+                type: string
+              description:
+                type: string
+              brands:
+                type: array
+                items:
+                  type: string
+          description: "Populated categories for category-type sections"
+        displayOrder:
+          type: number
+
+    CustomSectionUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        type:
+          type: string
+          enum: [products, categories, custom]
+        items:
+          type: array
+          items:
+            type: string
+          description: "Array of product IDs for product-type sections"
+        categories:
+          type: array
+          items:
+            type: string
+          description: "Array of category IDs for category-type sections"
+        displayOrder:
+          type: number
+
+    Layout:
+      type: object
+      properties:
+        banner:
+          type: array
+          items:
+            type: object
+            properties:
+              imageUrl:
+                type: string
+              link:
+                type: string
+              title:
+                type: string
+              order:
+                type: number
+        topItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+        customSections:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomSection'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryTree'
+        layout:
+          type: object
+          properties:
+            name:
+              type: string
+            id:
+              type: string
+
+    LayoutUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        banner:
+          type: array
+          items:
+            type: object
+            properties:
+              imageUrl:
+                type: string
+              link:
+                type: string
+              title:
+                type: string
+              order:
+                type: number
+        topItems:
+          type: array
+          items:
+            type: string
+          description: "Array of product IDs"
+        customSections:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomSectionUpdate'
+
+    # ============= IP Management Schemas =============
+    IPRule:
+      type: object
+      properties:
+        _id:
+          type: string
+        address:
+          type: string
+          example: "192.168.1.1"
+        type:
+          type: string
+          enum: [whitelist, blacklist]
+        reason:
+          type: string
+        addedBy:
+          $ref: '#/components/schemas/User'
+        expiresAt:
+          type: string
+          format: date-time
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    # ============= Search Schemas =============
+    SearchSuggestion:
+      type: object
+      properties:
+        products:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                example: "product"
+              name:
+                type: string
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                example: "category"
+              name:
+                type: string
+              slug:
+                type: string
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        pages:
+          type: integer
+
+    DashboardStats:
+      type: object
+      properties:
+        orders:
+          type: object
+          properties:
+            total:
+              type: number
+            today:
+              type: number
+            thisWeek:
+              type: number
+            thisMonth:
+              type: number
+            thisYear:
+              type: number
+            byStatus:
+              type: array
+              items:
+                type: object
+                properties:
+                  _id:
+                    type: string
+                  count:
+                    type: number
+        revenue:
+          type: object
+          properties:
+            totalRevenue:
+              type: number
+            avgOrderValue:
+              type: number
+            todayRevenue:
+              type: number
+            monthRevenue:
+              type: number
+        topProducts:
+          type: array
+          items:
+            type: object
+        categoryPerformance:
+          type: array
+          items:
+            type: object
+        users:
+          type: object
+          properties:
+            totalUsers:
+              type: number
+            activeUsers:
+              type: number
+            newToday:
+              type: number
+            newThisMonth:
+              type: number
+        recentOrders:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+
+  responses:
+    UnauthorizedError:
+      description: Access token is missing or invalid
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: Not authorized to access this route
+
+    ForbiddenError:
+      description: User role not authorized
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: User role user is not authorized to access this route
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: Resource not found
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              errors:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    msg:
+                      type: string
+                    param:
+                      type: string
+                    location:
+                      type: string
+
+    RecaptchaError:
+      description: reCAPTCHA verification failed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: reCAPTCHA verification failed
+              error:
+                type: string
+                example: "reCAPTCHA score too low: 0.2"
+
+tags:
+  - name: Auth
+    description: Authentication endpoints with reCAPTCHA protection
+  - name: Users
+    description: User profile and address management (self)
+  - name: Users Admin
+    description: Admin endpoints for user management
+  - name: Categories
+    description: Category management with brands and hierarchy
+  - name: Products
+    description: Product management with brands and models
+  - name: Orders
+    description: Order processing and management (user)
+  - name: Orders Admin
+    description: Admin endpoints for order management and search
+  - name: Cart
+    description: Shopping cart operations (auto-created on signup)
+  - name: Layout
+    description: Homepage layout configuration
+  - name: IP
+    description: IP whitelist/blacklist management
+  - name: Search
+    description: Search functionality
+
+paths:
+  # ============= AUTH ENDPOINTS =============
+  /auth/signup:
+    post:
+      tags: [Auth]
+      summary: Register a new user with reCAPTCHA protection
+      description: |
+        Creates a new user account with auto-generated userId and cart.
+        
+        **Features:**
+        - Auto-generates unique userId (format: USR + timestamp + random)
+        - Auto-creates an empty cart for the user
+        - Sends verification email
+        - Optional address can be added later
+        
+        **reCAPTCHA Requirements:**
+        - Token must be obtained from Google reCAPTCHA (v2 or v3)
+        - For v3, score should be above configured threshold (default 0.5)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+            examples:
+              basic:
+                summary: Basic signup without address
+                value:
+                  name: "John"
+                  surname: "Doe"
+                  email: "john.doe@example.com"
+                  password: "Password123"
+                  phone: "9876543210"
+                  recaptchaToken: "03AGdBq27s_7xU3zQYxK5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X"
+              withAddress:
+                summary: Signup with address
+                value:
+                  name: "Jane"
+                  surname: "Smith"
+                  email: "jane.smith@example.com"
+                  password: "Password123"
+                  phone: "9876543211"
+                  recaptchaToken: "03AGdBq27s_7xU3zQYxK5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X5X"
+                  addresses:
+                    - type: "primary"
+                      name: "Jane Smith"
+                      phone: "9876543211"
+                      addressLine1: "456 Park Avenue"
+                      city: "Delhi"
+                      state: "Delhi"
+                      pincode: "110001"
+      responses:
+        201:
+          description: User registered successfully with auto-created cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Registration successful. Please check your email to verify your account.
+        400:
+          oneOf:
+            - $ref: '#/components/responses/ValidationError'
+            - $ref: '#/components/responses/RecaptchaError'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login user with reCAPTCHA protection
+      description: |
+        Authenticates a user and returns JWT token.
+        
+        **Features:**
+        - Updates last login timestamp
+        - Resets login attempts on success
+        - Locks account after 5 failed attempts
+        
+        **reCAPTCHA Requirements:**
+        - Token must be obtained from Google reCAPTCHA
+        - Failed attempts with low scores may be rate limited
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        200:
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  token:
+                    type: string
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  user:
+                    $ref: '#/components/schemas/User'
+        400:
+          $ref: '#/components/responses/RecaptchaError'
+        401:
+          description: Invalid credentials or account not activated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Invalid credentials
+                  needsActivation:
+                    type: boolean
+                    example: true
+        423:
+          description: Account locked
+
+  /auth/verify/{token}:
+    get:
+      tags: [Auth]
+      summary: Verify email with token
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Email verified successfully. You can now login.
+        400:
+          description: Invalid or expired token
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user profile
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Current user data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+        401:
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # ============= CATEGORY ENDPOINTS (UPDATED WITH BRANDS) =============
+  /categories:
+    get:
+      tags: [Categories]
+      summary: Get all categories as a tree structure with brands
+      description: Returns categories in a hierarchical tree structure with brands at every level.
+      responses:
+        200:
+          description: Category tree with brands at all levels
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: number
+                    example: 10
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CategoryTree'
+
+    post:
+      tags: [Categories]
+      summary: Create a new category with brands (Admin only)
+      description: |
+        Creates a new category with auto-generated categoryId and slug.
+        Brands can be provided as an array or comma-separated string.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryCreate'
+            examples:
+              rootWithBrands:
+                summary: Create root category with brands array
+                value:
+                  name: "Electronics"
+                  description: "Electronic items and gadgets"
+                  brands: ["Samsung", "Sony", "LG", "Panasonic"]
+                  order: 1
+              
+              childWithBrandsString:
+                summary: Create child category with comma-separated brands
+                value:
+                  name: "Laptops"
+                  description: "Portable computers"
+                  brands: "Dell,HP,Lenovo,Apple,Asus,Acer"
+                  parent: "CAT123456781234"
+                  order: 1
+      responses:
+        201:
+          description: Category created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CategoryTree'
+        400:
+          description: Validation error or parent not found
+        401:
+          $ref: '#/components/responses/UnauthorizedError'
+        403:
+          $ref: '#/components/responses/ForbiddenError'
+
+  /categories/{id}:
+    get:
+      tags: [Categories]
+      summary: Get single category by ID with its brands and children
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Category ID (ObjectId, categoryId, or slug)
+      responses:
+        200:
+          description: Category details with brands and subcategories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Category'
+        404:
+          description: Category not found
+
+    put:
+      tags: [Categories]
+      summary: Update category (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryUpdate'
+            examples:
+              updateBrands:
+                summary: Update category brands
+                value:
+                  brands: ["Intel", "AMD", "NVIDIA", "Qualcomm"]
+              
+              addBrands:
+                summary: Add more brands
+                value:
+                  brands: "Samsung,Sony,Panasonic"
+      responses:
+        200:
+          description: Category updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CategoryTree'
+        404:
+          description: Category not found
+
+    delete:
+      tags: [Categories]
+      summary: Delete category (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Category deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Category deleted successfully
+                  count:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CategoryTree'
+        400:
+          description: Category has products or subcategories
+        404:
+          description: Category not found
+
+  /categories/{id}/hierarchy:
+    get:
+      tags: [Categories]
+      summary: Get complete category hierarchy with brands
+      description: Returns ancestors, current category, and all descendants with brands at every level.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Complete category hierarchy with brands
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/CategoryHierarchy'
+        404:
+          description: Category not found
+
+  /categories/{id}/brands:
+    get:
+      tags: [Categories]
+      summary: Get brands for a specific category
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Category brands
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/CategoryBrands'
+        404:
+          description: Category not found
+
+  /categories/roots:
+    get:
+      tags: [Categories]
+      summary: Get all root categories (top-level only)
+      responses:
+        200:
+          description: List of root categories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        slug:
+                          type: string
+                        order:
+                          type: number
+                        image:
+                          type: string
+                        brands:
+                          type: array
+                          items:
+                            type: string
+
+  /categories/{id}/children:
+    get:
+      tags: [Categories]
+      summary: Get direct children of a category
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Direct child categories with brands
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        slug:
+                          type: string
+                        order:
+                          type: number
+                        image:
+                          type: string
+                        brands:
+                          type: array
+                          items:
+                            type: string
+
+  /categories/{id}/breadcrumb:
+    get:
+      tags: [Categories]
+      summary: Get breadcrumb path for a category
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Breadcrumb path from root to current category
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        slug:
+                          type: string
+
+  /categories/search/{query}:
+    get:
+      tags: [Categories]
+      summary: Search categories by name
+      parameters:
+        - in: path
+          name: query
+          required: true
+          schema:
+            type: string
+          minLength: 2
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+      responses:
+        200:
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        slug:
+                          type: string
+                        parent:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+                            slug:
+                              type: string
+
+  # ============= PRODUCT ENDPOINTS (UPDATED WITH BRANDS AND MODELS) =============
+  /products:
+    get:
+      tags: [Products]
+      summary: Get all products with filters
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+        - in: query
+          name: category
+          schema:
+            type: string
+          description: Filter by category (ID, categoryId, or slug)
+        - in: query
+          name: brand
+          schema:
+            type: string
+          description: Filter by brand name
+        - in: query
+          name: minPrice
+          schema:
+            type: number
+        - in: query
+          name: maxPrice
+          schema:
+            type: number
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [price_asc, price_desc, newest, popular, brand_asc]
+        - in: query
+          name: inStock
+          schema:
+            type: boolean
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Text search across name, description, brand, and model
+      responses:
+        200:
+          description: List of products with brand and model information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: number
+                  total:
+                    type: number
+                  page:
+                    type: number
+                  pages:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+
+    post:
+      tags: [Products]
+      summary: Create a new product with brand and model (Admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductCreate'
+      responses:
+        201:
+          description: Product created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Product'
+        400:
+          $ref: '#/components/responses/ValidationError'
+        401:
+          $ref: '#/components/responses/UnauthorizedError'
+        403:
+          $ref: '#/components/responses/ForbiddenError'
+
+  /products/brands:
+    get:
+      tags: [Products]
+      summary: Get all unique brands with product counts
+      responses:
+        200:
+          description: List of all brands
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Brand'
+
+  /products/brand/{brand}:
+    get:
+      tags: [Products]
+      summary: Get products by brand
+      parameters:
+        - in: path
+          name: brand
+          required: true
+          schema:
+            type: string
+          example: "Intel"
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [price_asc, price_desc, newest, name_asc]
+            default: name_asc
+      responses:
+        200:
+          description: Products filtered by brand
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: number
+                  total:
+                    type: number
+                  page:
+                    type: number
+                  pages:
+                    type: number
+                  brand:
+                    type: string
+                  availableModels:
+                    type: array
+                    items:
+                      type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+
+  /products/brand/{brand}/models:
+    get:
+      tags: [Products]
+      summary: Get all models for a specific brand
+      parameters:
+        - in: path
+          name: brand
+          required: true
+          schema:
+            type: string
+          example: "Intel"
+      responses:
+        200:
+          description: List of models for the brand
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  count:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BrandModels'
+
+  /products/brand/{brand}/model/{model}:
+    get:
+      tags: [Products]
+      summary: Get products by specific brand and model
+      parameters:
+        - in: path
+          name: brand
+          required: true
+          schema:
+            type: string
+          example: "Intel"
+        - in: path
+          name: model
+          required: true
+          schema:
+            type: string
+          example: "Core i9-13900K"
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+      responses:
+        200:
+          description: Products filtered by brand and model
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: number
+                  total:
+                    type: number
+                  page:
+                    type: number
+                  pages:
+                    type: number
+                  brand:
+                    type: string
+                  model:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+
+  /products/category/{categoryName}:
+    get:
+      tags: [Products]
+      summary: Get products by category name
+      parameters:
+        - in: path
+          name: categoryName
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+      responses:
+        200:
+          description: Products in the specified category
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: number
+                  total:
+                    type: number
+                  page:
+                    type: number
+                  pages:
+                    type: number
+                  category:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      slug:
+                        type: string
+                      brands:
+                        type: array
+                        items:
+                          type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+
+  /products/category/id/{categoryId}:
+    get:
+      tags: [Products]
+      summary: Get products by category ID
+      parameters:
+        - in: path
+          name: categoryId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+      responses:
+        200:
+          description: Products in the specified category
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: number
+                  total:
+                    type: number
+                  page:
+                    type: number
+                  pages:
+                    type: number
+                  category:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      slug:
+                        type: string
+                      brands:
+                        type: array
+                        items:
+                          type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+
+  /products/{id}:
+    get:
+      tags: [Products]
+      summary: Get single product by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Product ID, productId, or MongoDB ObjectId
+      responses:
+        200:
+          description: Product details with related products
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ProductWithRelated'
+        404:
+          description: Product not found
+
+    put:
+      tags: [Products]
+      summary: Update product (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductUpdate'
+      responses:
+        200:
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Product'
+        404:
+          $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      tags: [Products]
+      summary: Delete product (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Product deleted successfully
+        404:
+          $ref: '#/components/responses/NotFoundError'
+
+  /products/{id}/images:
+    post:
+      tags: [Products]
+      summary: Upload product image (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        200:
+          description: Image uploaded successfully
+
+  /products/{id}/images/{imageId}:
+    delete:
+      tags: [Products]
+      summary: Delete product image (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: imageId
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Image deleted successfully
+
+  # ============= USER SELF MANAGEMENT ENDPOINTS =============
+  /users/profile:
+    get:
+      tags: [Users]
+      summary: Get own user profile
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: User profile data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+
+    put:
+      tags: [Users]
+      summary: Update own profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                surname:
+                  type: string
+                phone:
+                  type: string
+      responses:
+        200:
+          description: Profile updated
+
+  /users/change-password:
+    put:
+      tags: [Users]
+      summary: Change own password
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currentPassword
+                - newPassword
+              properties:
+                currentPassword:
+                  type: string
+                  format: password
+                newPassword:
+                  type: string
+                  format: password
+      responses:
+        200:
+          description: Password changed successfully
+        401:
+          description: Current password is incorrect
+
+  /users/addresses:
+    get:
+      tags: [Users]
+      summary: Get own addresses
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of addresses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Address'
+
+    post:
+      tags: [Users]
+      summary: Add new address
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Address'
+      responses:
+        201:
+          description: Address added
+
+  /users/addresses/{addressId}:
+    put:
+      tags: [Users]
+      summary: Update address
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: addressId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Address'
+      responses:
+        200:
+          description: Address updated
+        404:
+          description: Address not found
+
+    delete:
+      tags: [Users]
+      summary: Delete address
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: addressId
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Address deleted
+
+  /users/addresses/{addressId}/default:
+    put:
+      tags: [Users]
+      summary: Set default address
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: addressId
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Default address set
+
+  /users/orders:
+    get:
+      tags: [Users]
+      summary: Get own orders
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of user orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+
+  /users/orders/{orderId}:
+    get:
+      tags: [Users]
+      summary: Get specific own order
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Order details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Order'
+        404:
+          description: Order not found
+
+  # ============= ADMIN USER MANAGEMENT ENDPOINTS =============
+  /users/admin/all:
+    get:
+      tags: [Users Admin]
+      summary: Get all users with filters and statistics (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: role
+          schema:
+            type: string
+            enum: [user, admin]
+        - in: query
+          name: isActive
+          schema:
+            type: boolean
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Search by name, email, phone, or userId
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+            enum: [createdAt, name, email, totalOrders, totalSpent]
+            default: createdAt
+        - in: query
+          name: sortOrder
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        200:
+          description: List of users with statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: number
+                  total:
+                    type: number
+                  page:
+                    type: number
+                  pages:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserWithStats'
+
+  /users/admin/{userId}:
+    get:
+      tags: [Users Admin]
+      summary: Get user details by ID (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          description: User ID or userId
+      responses:
+        200:
+          description: User details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+        404:
+          description: User not found
+
+    put:
+      tags: [Users Admin]
+      summary: Update user by ID (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                surname:
+                  type: string
+                phone:
+                  type: string
+                role:
+                  type: string
+                  enum: [user, admin]
+                isActive:
+                  type: boolean
+                addresses:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Address'
+      responses:
+        200:
+          description: User updated
+        404:
+          description: User not found
+
+    delete:
+      tags: [Users Admin]
+      summary: Delete or deactivate user (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: User deleted or deactivated
+        404:
+          description: User not found
+
+  /users/admin/{userId}/reset-password:
+    post:
+      tags: [Users Admin]
+      summary: Reset user password (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - newPassword
+              properties:
+                newPassword:
+                  type: string
+                  format: password
+      responses:
+        200:
+          description: Password reset successfully
+        404:
+          description: User not found
+
+  # ============= CART ENDPOINTS =============
+  /cart:
+    get:
+      tags: [Cart]
+      summary: Get user cart (auto-creates if not exists)
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Cart data with products including brand and model
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Cart'
+
+    delete:
+      tags: [Cart]
+      summary: Clear cart
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Cart cleared
+
+  /cart/items:
+    post:
+      tags: [Cart]
+      summary: Add item to cart
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - productId
+              properties:
+                productId:
+                  type: string
+                quantity:
+                  type: integer
+                  minimum: 1
+                  default: 1
+      responses:
+        200:
+          description: Item added to cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Cart'
+
+  /cart/items/{itemId}:
+    put:
+      tags: [Cart]
+      summary: Update cart item quantity
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - quantity
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 1
+      responses:
+        200:
+          description: Cart updated
+
+    delete:
+      tags: [Cart]
+      summary: Remove item from cart
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Item removed from cart
+
+  # ============= ORDER ENDPOINTS =============
+  /orders:
+    post:
+      tags: [Orders]
+      summary: Create new order from cart
+      description: Creates an order from the user's cart and clears the cart.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - shippingAddress
+              properties:
+                shippingAddress:
+                  $ref: '#/components/schemas/Address'
+                billingAddress:
+                  $ref: '#/components/schemas/Address'
+                paymentMethod:
+                  type: string
+                  enum: [razorpay]
+                  default: razorpay
+      responses:
+        201:
+          description: Order created with payment details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      order:
+                        $ref: '#/components/schemas/Order'
+                      payment:
+                        type: object
+                        properties:
+                          razorpayOrderId:
+                            type: string
+                          amount:
+                            type: number
+                          currency:
+                            type: string
+
+  /orders/{orderId}/verify-payment:
+    post:
+      tags: [Orders]
+      summary: Verify Razorpay payment
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - razorpayPaymentId
+                - razorpaySignature
+              properties:
+                razorpayPaymentId:
+                  type: string
+                razorpaySignature:
+                  type: string
+      responses:
+        200:
+          description: Payment verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Order'
+
+  /orders/{orderId}:
+    get:
+      tags: [Orders]
+      summary: Get order by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Order details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Order'
+
+  /orders/{orderId}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel order
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        200:
+          description: Order cancelled successfully
+
+  # ============= ADMIN ORDER MANAGEMENT ENDPOINTS =============
+  /orders/admin/all:
+    get:
+      tags: [Orders Admin]
+      summary: Get all orders with filters (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, accepted, ready_to_ship, picked_up, in_transit, delivered, cancelled, refunded]
+        - in: query
+          name: fromDate
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: toDate
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: minAmount
+          schema:
+            type: number
+        - in: query
+          name: maxAmount
+          schema:
+            type: number
+      responses:
+        200:
+          description: List of orders with pagination
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: number
+                  total:
+                    type: number
+                  page:
+                    type: number
+                  pages:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+
+  /orders/admin/user/{userId}:
+    get:
+      tags: [Orders Admin]
+      summary: Get orders by user ID with statistics (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          description: User ID or userId
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, accepted, ready_to_ship, picked_up, in_transit, delivered, cancelled, refunded]
+        - in: query
+          name: fromDate
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: toDate
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: minAmount
+          schema:
+            type: number
+        - in: query
+          name: maxAmount
+          schema:
+            type: number
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+            enum: [createdAt, total, status]
+            default: createdAt
+        - in: query
+          name: sortOrder
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        200:
+          description: Orders for the specified user with statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrdersByUserResponse'
+        404:
+          description: User not found
+
+  /orders/admin/user/{userId}/stats:
+    get:
+      tags: [Orders Admin]
+      summary: Get comprehensive order statistics for a user (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          description: User ID or userId
+      responses:
+        200:
+          description: User order statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOrderStats'
+        404:
+          description: User not found
+
+  /orders/admin/search/by-email:
+    get:
+      tags: [Orders Admin]
+      summary: Search orders by user email (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: email
+          required: true
+          schema:
+            type: string
+            format: email
+          description: User email address
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, accepted, ready_to_ship, picked_up, in_transit, delivered, cancelled, refunded]
+      responses:
+        200:
+          description: Orders for the user with specified email
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                          email:
+                            type: string
+                      orders:
+                        type: object
+                        properties:
+                          data:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Order'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+        404:
+          description: User not found
+
+  /orders/admin/search/by-phone:
+    get:
+      tags: [Orders Admin]
+      summary: Search orders by user phone (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: phone
+          required: true
+          schema:
+            type: string
+          description: User phone number
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, accepted, ready_to_ship, picked_up, in_transit, delivered, cancelled, refunded]
+      responses:
+        200:
+          description: Orders for the user with specified phone
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                          phone:
+                            type: string
+                      orders:
+                        type: object
+                        properties:
+                          data:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Order'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+        404:
+          description: User not found
+
+  /orders/{orderId}/status:
+    put:
+      tags: [Orders Admin]
+      summary: Update order status with tracking number (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [accepted, ready_to_ship, picked_up, in_transit, delivered, cancelled]
+                  description: "New order status"
+                note:
+                  type: string
+                  description: "Optional note about the status change"
+                trackingNumber:
+                  type: string
+                  description: "Tracking number (required for shipping statuses: ready_to_ship, picked_up, in_transit)"
+                  example: "FDX123456789"
+            examples:
+              accepted:
+                summary: Accept order
+                value:
+                  status: "accepted"
+                  note: "Order confirmed and processing"
+              
+              ready_to_ship:
+                summary: Mark as ready to ship
+                value:
+                  status: "ready_to_ship"
+                  note: "Package ready for courier pickup"
+                  trackingNumber: "FDX123456789"
+              
+              in_transit:
+                summary: Mark as in transit
+                value:
+                  status: "in_transit"
+                  note: "Order shipped via FedEx"
+                  trackingNumber: "FDX123456789"
+      responses:
+        200:
+          description: Order status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Order'
+        400:
+          description: Tracking number required for shipping status
+        404:
+          description: Order not found
+
+  # ============= LAYOUT ENDPOINTS =============
+  /layout:
+    get:
+      tags: [Layout]
+      summary: Get active layout with populated data
+      responses:
+        200:
+          description: Complete layout with products and categories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Layout'
+
+    put:
+      tags: [Layout]
+      summary: Update layout (Admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LayoutUpdate'
+      responses:
+        200:
+          description: Layout updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      banner:
+                        type: array
+                      topItems:
+                        type: array
+                        items:
+                          type: string
+                      customSections:
+                        type: array
+
+  # ============= SEARCH ENDPOINTS =============
+  /search:
+    get:
+      tags: [Search]
+      summary: Search products across name, description, brand, and model
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+          description: Search query
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: category
+          schema:
+            type: string
+          description: Category slug to filter
+        - in: query
+          name: brand
+          schema:
+            type: string
+          description: Filter by brand
+        - in: query
+          name: minPrice
+          schema:
+            type: number
+        - in: query
+          name: maxPrice
+          schema:
+            type: number
+      responses:
+        200:
+          description: Search results with suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: number
+                  total:
+                    type: number
+                  page:
+                    type: number
+                  pages:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  suggestions:
+                    type: array
+                    items:
+                      type: string
+
+  /search/suggestions:
+    get:
+      tags: [Search]
+      summary: Get search suggestions
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Search suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/SearchSuggestion'
+
+  # ============= IP MANAGEMENT ENDPOINTS =============
+  /ip:
+    get:
+      tags: [IP]
+      summary: Get all IP rules (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [whitelist, blacklist]
+      responses:
+        200:
+          description: List of IP rules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IPRule'
+
+    post:
+      tags: [IP]
+      summary: Add IP rule (Admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - address
+                - type
+              properties:
+                address:
+                  type: string
+                  example: "192.168.1.100"
+                type:
+                  type: string
+                  enum: [whitelist, blacklist]
+                reason:
+                  type: string
+                expiresAt:
+                  type: string
+                  format: date-time
+      responses:
+        201:
+          description: IP rule created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/IPRule'
+
+  /ip/{id}:
+    put:
+      tags: [IP]
+      summary: Update IP rule (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [whitelist, blacklist]
+                reason:
+                  type: string
+                expiresAt:
+                  type: string
+                  format: date-time
+                isActive:
+                  type: boolean
+      responses:
+        200:
+          description: IP rule updated
+
+    delete:
+      tags: [IP]
+      summary: Delete IP rule (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: IP rule deleted
+
+  /ip/check/{address}:
+    get:
+      tags: [IP]
+      summary: Check IP status (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: address
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: IP status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      address:
+                        type: string
+                      status:
+                        type: string
+                        enum: [whitelist, blacklist, allowed]
+                      rule:
+                        $ref: '#/components/schemas/IPRule'
+
+  /health:
+    get:
+      tags: [System]
+      summary: Health check endpoint
+      responses:
+        200:
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Server is running
